@@ -102,10 +102,10 @@ class Battleship {
     GetRandomPosition() {
         var rows = 8;
         var lines = 8;
-        var rndColumn = Math.floor((Math.random() * lines));
-        var letter = letters.get(rndColumn + 1);
-        var number = Math.floor((Math.random() * rows));
-        var result = new position(letter, number);
+        var rndColumn = Math.floor(Math.random() * lines) + 1;
+        var rndRow = Math.floor(Math.random() * rows) + 1;
+        var letter = letters.get(rndColumn);
+        var result = new position(letter, rndRow);
         return result;
     }
 
@@ -140,10 +140,11 @@ class Battleship {
         this.enemyFleet[0].addPosition(new position(letters.B, 7));
         this.enemyFleet[0].addPosition(new position(letters.B, 8));
 
+        this.enemyFleet[1].addPosition(new position(letters.E, 5));
         this.enemyFleet[1].addPosition(new position(letters.E, 6));
         this.enemyFleet[1].addPosition(new position(letters.E, 7));
         this.enemyFleet[1].addPosition(new position(letters.E, 8));
-        this.enemyFleet[1].addPosition(new position(letters.E, 9));
+
 
         this.enemyFleet[2].addPosition(new position(letters.A, 3));
         this.enemyFleet[2].addPosition(new position(letters.B, 3));
