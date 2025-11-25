@@ -14,7 +14,7 @@ describe('checkIsHitTests', function () {
       }
       counter++;
     })
-    var actual = gameController.CheckIsHit(ships, new position(letters.B, 3));
+    var actual = gameController.CheckIsHit(ships, new Position(letters.B, 3));
     assert.ok(actual);
   });
 
