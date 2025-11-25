@@ -51,11 +51,11 @@ class Battleship {
             console.log("Player, it's your turn");
             console.log("Enter coordinates for your shot :");
             var position = Battleship.ParsePosition(readline.question());
-            var isHit = gameController.CheckIsHit(this.enemyFleet, position);
+            // recordShot will mark hits and return structured info including sunk ships and fleet status
+            const playerResult = gameController.recordShot(this.enemyFleet, position);
+            telemetryWorker.postMessage({eventName: 'Player_ShootPosition', properties:  {Position: position.toString(), IsHit: playerResult.isHit}});
 
-            telemetryWorker.postMessage({eventName: 'Player_ShootPosition', properties:  {Position: position.toString(), IsHit: isHit}});
-
-            if (isHit) {
+            if (playerResult.isHit) {
                 beep();
 
                 console.log("                \\         .  ./");
@@ -68,18 +68,23 @@ class Battleship {
                 console.log("                   \\  \\   /  /");
             }
 
-            console.log(isHit ? "Yeah ! Nice hit !" : "Miss");
+            console.log(playerResult.isHit ? "Yeah ! Nice hit !" : "Miss");
+
+            if (playerResult.sunkShip) {
+                console.log(cliColor.green(`You sunk the enemy ${playerResult.sunkShip.name} (size ${playerResult.sunkShip.size})!`));
+                telemetryWorker.postMessage({eventName: 'ShipSunk', properties: {Owner: 'Enemy', Ship: playerResult.sunkShip.name, Size: playerResult.sunkShip.size}});
+                console.log(`Fleet status: ${playerResult.status.sunk.length} sunk, ${playerResult.status.remaining.length} remaining`);
+            }
 
             var computerPos = this.GetRandomPosition();
-            isHit = gameController.CheckIsHit(this.myFleet, computerPos);
-
-            telemetryWorker.postMessage({eventName: 'Computer_ShootPosition', properties:  {Position: computerPos.toString(), IsHit: isHit}});
+            const computerResult = gameController.recordShot(this.myFleet, computerPos);
+            telemetryWorker.postMessage({eventName: 'Computer_ShootPosition', properties:  {Position: computerPos.toString(), IsHit: computerResult.isHit}});
 
             console.log();
-            console.log(`Computer shot in ${computerPos.column}${computerPos.row} and ` + (isHit ? `has hit your ship !` : `miss`));
-            if (isHit) {
-                beep();
-
+            console.log(`Computer shot in ${computerPos.column}${computerPos.row} and ` + (computerResult.isHit ? `has hit your ship !` : `miss`));
+            if (computerResult.isHit) {
+                beep();  
+              
                 console.log("                \\         .  ./");
                 console.log("              \\      .:\";'.:..\"   /");
                 console.log("                  (M^^.^~~:.'\").");
@@ -88,6 +93,12 @@ class Battleship {
                 console.log("            -   (\\- |  \\ /  |  /)  -");
                 console.log("                 -\\  \\     /  /-");
                 console.log("                   \\  \\   /  /");
+            }
+
+            if (computerResult.sunkShip) {
+                console.log(cliColor.red(`Your ${computerResult.sunkShip.name} (size ${computerResult.sunkShip.size}) has been sunk!`));
+                telemetryWorker.postMessage({eventName: 'ShipSunk', properties: {Owner: 'Player', Ship: computerResult.sunkShip.name, Size: computerResult.sunkShip.size}});
+                console.log(`Your fleet status: ${computerResult.status.sunk.length} sunk, ${computerResult.status.remaining.length} remaining`);
             }
         }
         while (true);
