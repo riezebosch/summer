@@ -57,19 +57,20 @@ class GameController {
         return { sunk, remaining };
     }
 
-    // marks hit (via CheckIsHit) and returns structured result:
-    // { isHit: bool, sunkShip: {name,size} | null, status: getFleetStatus(...) }
     static recordShot(ships, shot) {
+        const preSunk = new Set((ships || []).filter(s => GameController.isShipSunk(s)).map(s => s.name));
         const isHit = GameController.CheckIsHit(ships, shot);
+
         let sunkShip = null;
         if (isHit) {
             for (const ship of (ships || [])) {
-                if (GameController.isShipSunk(ship)) {
+                if (GameController.isShipSunk(ship) && !preSunk.has(ship.name)) {
                     sunkShip = { name: ship.name, size: ship.size };
                     break;
                 }
             }
         }
+
         const status = GameController.getFleetStatus(ships);
         return { isHit, sunkShip, status };
     }

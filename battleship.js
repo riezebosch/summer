@@ -73,7 +73,10 @@ class Battleship {
             if (playerResult.sunkShip) {
                 console.log(cliColor.green(`You sunk the enemy ${playerResult.sunkShip.name} (size ${playerResult.sunkShip.size})!`));
                 telemetryWorker.postMessage({eventName: 'ShipSunk', properties: {Owner: 'Enemy', Ship: playerResult.sunkShip.name, Size: playerResult.sunkShip.size}});
-                console.log(`Fleet status: ${playerResult.status.sunk.length} sunk, ${playerResult.status.remaining.length} remaining`);
+                const pSunk = playerResult.status.sunk.length;
+                const pRem = playerResult.status.remaining.length;
+                const pRemList = (playerResult.status.remaining || []).map(s => `${s.name} (${s.size})`).join(', ') || 'none';
+                console.log(`Fleet status: ${pSunk} sunk, ${pRem} remaining: ${pRemList}`);                
             }
 
             var computerPos = this.GetRandomPosition();
@@ -98,7 +101,10 @@ class Battleship {
             if (computerResult.sunkShip) {
                 console.log(cliColor.red(`Your ${computerResult.sunkShip.name} (size ${computerResult.sunkShip.size}) has been sunk!`));
                 telemetryWorker.postMessage({eventName: 'ShipSunk', properties: {Owner: 'Player', Ship: computerResult.sunkShip.name, Size: computerResult.sunkShip.size}});
-                console.log(`Your fleet status: ${computerResult.status.sunk.length} sunk, ${computerResult.status.remaining.length} remaining`);
+                const cSunk = computerResult.status.sunk.length;
+                const cRem = computerResult.status.remaining.length;
+                const cRemList = (computerResult.status.remaining || []).map(s => `${s.name} (${s.size})`).join(', ') || 'none';
+                console.log(`Your fleet status: ${cSunk} sunk, ${cRem} remaining: ${cRemList}`);
             }
         }
         while (true);
