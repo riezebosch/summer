@@ -75,5 +75,5 @@ class GameController {
         return { isHit, sunkShip, status };
     }
 }
-// ...existing code...
+
 module.exports = GameController;
