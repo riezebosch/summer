@@ -68,7 +68,7 @@ class Battleship {
                 console.log(cliColor.green("                   \\  \\   /  /"));
             }
 
-            console.log(isHit ? cliColor.green("Yeah ! Nice hit !") : cliColor.red("Miss"));
+            console.log(playerResult.isHit ? cliColor.green("Yeah ! Nice hit !") : cliColor.red("Miss"));
 
             if (playerResult.sunkShip) {
                 console.log(cliColor.green(`You sunk the enemy ${playerResult.sunkShip.name} (size ${playerResult.sunkShip.size})!`));
