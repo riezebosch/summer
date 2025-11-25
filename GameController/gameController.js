@@ -20,8 +20,11 @@ class GameController {
         var returnvalue = false;
         ships.forEach(function (ship) {
             ship.positions.forEach(position => {
-                if (position.row == shot.row && position.column == shot.column)
+                if (position.row == shot.row && position.column == shot.column) {
+                    // mark the position as hit for tracking
+                    position.isHit = true;
                     returnvalue = true;
+                }
             });
         });
         return returnvalue;
@@ -29,6 +32,47 @@ class GameController {
 
     static isShipValid(ship) {
         return ship.positions.length == ship.size;
+    }
+
+    // returns true when every position on the ship has been hit
+    static isShipSunk(ship) {
+        if (!ship || !Array.isArray(ship.positions) || ship.positions.length === 0) return false;
+        return ship.positions.every(p => p && p.isHit === true);
+    }
+
+    // returns { sunk: [{name,size}], remaining: [{name,size,hitsRemaining}] }
+    static getFleetStatus(ships) {
+        const sunk = [];
+        const remaining = [];
+        (ships || []).forEach(ship => {
+            if (GameController.isShipSunk(ship)) {
+                sunk.push({ name: ship.name, size: ship.size });
+            } else {
+                // count how many hits have already been made on this ship
+                const hits = (ship.positions || []).filter(p => p && p.isHit).length;
+                const hitsRemaining = Math.max(0, ship.size - hits);
+                remaining.push({ name: ship.name, size: ship.size, hitsRemaining });
+            }
+        });
+        return { sunk, remaining };
+    }
+
+    static recordShot(ships, shot) {
+        const preSunk = new Set((ships || []).filter(s => GameController.isShipSunk(s)).map(s => s.name));
+        const isHit = GameController.CheckIsHit(ships, shot);
+
+        let sunkShip = null;
+        if (isHit) {
+            for (const ship of (ships || [])) {
+                if (GameController.isShipSunk(ship) && !preSunk.has(ship.name)) {
+                    sunkShip = { name: ship.name, size: ship.size };
+                    break;
+                }
+            }
+        }
+
+        const status = GameController.getFleetStatus(ships);
+        return { isHit, sunkShip, status };
     }
 }
 

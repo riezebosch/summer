@@ -51,11 +51,11 @@ class Battleship {
             console.log(cliColor.cyan("Player, it's your turn"));
             console.log(cliColor.cyan("Enter coordinates for your shot :"));
             var position = Battleship.ParsePosition(readline.question());
-            var isHit = gameController.CheckIsHit(this.enemyFleet, position);
+            // recordShot will mark hits and return structured info including sunk ships and fleet status
+            const playerResult = gameController.recordShot(this.enemyFleet, position);
+            telemetryWorker.postMessage({eventName: 'Player_ShootPosition', properties:  {Position: position.toString(), IsHit: playerResult.isHit}});
 
-            telemetryWorker.postMessage({eventName: 'Player_ShootPosition', properties:  {Position: position.toString(), IsHit: isHit}});
-
-            if (isHit) {
+            if (playerResult.isHit) {
                 beep();
 
                 console.log(cliColor.green("                \\         .  ./"));
@@ -68,17 +68,25 @@ class Battleship {
                 console.log(cliColor.green("                   \\  \\   /  /"));
             }
 
-            console.log(isHit ? cliColor.green("Yeah ! Nice hit !") : cliColor.red("Miss"));
+            console.log(playerResult.isHit ? cliColor.green("Yeah ! Nice hit !") : cliColor.red("Miss"));
+
+            if (playerResult.sunkShip) {
+                console.log(cliColor.green(`You sunk the enemy ${playerResult.sunkShip.name} (size ${playerResult.sunkShip.size})!`));
+                telemetryWorker.postMessage({eventName: 'ShipSunk', properties: {Owner: 'Enemy', Ship: playerResult.sunkShip.name, Size: playerResult.sunkShip.size}});
+                const pSunk = playerResult.status.sunk.length;
+                const pRem = playerResult.status.remaining.length;
+                const pRemList = (playerResult.status.remaining || []).map(s => `${s.name} (${s.size})`).join(', ') || 'none';
+                console.log(`Fleet status: ${pSunk} sunk, ${pRem} remaining: ${pRemList}`);                
+            }
 
             var computerPos = this.GetRandomPosition();
-            isHit = gameController.CheckIsHit(this.myFleet, computerPos);
-
-            telemetryWorker.postMessage({eventName: 'Computer_ShootPosition', properties:  {Position: computerPos.toString(), IsHit: isHit}});
+            const computerResult = gameController.recordShot(this.myFleet, computerPos);
+            telemetryWorker.postMessage({eventName: 'Computer_ShootPosition', properties:  {Position: computerPos.toString(), IsHit: computerResult.isHit}});
 
             console.log();
             console.log(cliColor.red("It's enemy turn"));
-            console.log(`Computer shot in ${computerPos.column}${computerPos.row} and ` + (isHit ? cliColor.red(`has hit your ship !`) : cliColor.green(`miss`)));
-            if (isHit) {
+            console.log(`Computer shot in ${computerPos.column}${computerPos.row} and ` + (computerResult.isHit ? `has hit your ship !` : `miss`));
+            if (computerResult.isHit) {
                 beep();
 
                 console.log(cliColor.red("                \\         .  ./"));
@@ -89,6 +97,15 @@ class Battleship {
                 console.log(cliColor.red("            -   (\\- |  \\ /  |  /)  -"));
                 console.log(cliColor.red("                 -\\  \\     /  /-"));
                 console.log(cliColor.red("                   \\  \\   /  /"));
+            }
+
+            if (computerResult.sunkShip) {
+                console.log(cliColor.red(`Your ${computerResult.sunkShip.name} (size ${computerResult.sunkShip.size}) has been sunk!`));
+                telemetryWorker.postMessage({eventName: 'ShipSunk', properties: {Owner: 'Player', Ship: computerResult.sunkShip.name, Size: computerResult.sunkShip.size}});
+                const cSunk = computerResult.status.sunk.length;
+                const cRem = computerResult.status.remaining.length;
+                const cRemList = (computerResult.status.remaining || []).map(s => `${s.name} (${s.size})`).join(', ') || 'none';
+                console.log(`Your fleet status: ${cSunk} sunk, ${cRem} remaining: ${cRemList}`);
             }
         }
         while (true);
