@@ -1,7 +1,7 @@
 const assert = require('assert').strict;
 const gameController = require("../GameController/gameController.js");
 const letters = require("../GameController/letters.js");
-const position = require("../GameController/position.js")
+const Position = require("../GameController/position.js")
 
 describe('checkIsHitTests', function () {
 
@@ -10,7 +10,7 @@ describe('checkIsHitTests', function () {
     var counter = 1;
     ships.forEach(ship => {
       for (var i = 1; i <= ship.size; i++) {
-        ship.addPosition(new position(letters.get(counter), i))
+        ship.addPosition(new Position(letters.get(counter), i))
       }
       counter++;
     })
@@ -23,15 +23,15 @@ describe('checkIsHitTests', function () {
     var counter = 1;
     ships.forEach(ship => {
       for (var i = 1; i <= ship.size; i++) {
-        ship.addPosition(new position(letters.get(counter), i))
+        ship.addPosition(new Position(letters.get(counter), i))
       }
       counter++;
     })
-    var actual = gameController.CheckIsHit(ships, new position(letters.G, 1));
+    var actual = gameController.CheckIsHit(ships, new Position(letters.G, 1));
     assert.strictEqual(actual, false);
   });
 
-  it('should throw an exception if positstion is undefined', function () {
+  it('should throw an exception if position is undefined', function () {
     var ships = gameController.InitializeShips();
     assert.throws(
       () => {
@@ -43,7 +43,7 @@ describe('checkIsHitTests', function () {
   it('should throw an exception if ship is undefined', function () {
     assert.throws(
       () => {
-        gameController.CheckIsHit(undefined, new position(letters.G, 1));
+        gameController.CheckIsHit(undefined, new Position(letters.G, 1));
       }
     )
   });
