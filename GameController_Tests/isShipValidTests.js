@@ -35,4 +35,20 @@ describe('isShipValidTests', function () {
       });
     });
   });
+
+  it('should ensure ships do not cross each other', function () {
+    const fleet = gameController.InitializeShips();
+    const occupiedPositions = new Set();
+
+    fleet.forEach(ship => {
+      ship.positions.forEach(pos => {
+        const posKey = `${pos.column},${pos.row}`;
+        assert.ok(
+          !occupiedPositions.has(posKey),
+          `Ship ${ship.name} overlaps with another ship at position column ${pos.column}, row ${pos.row}`
+        );
+        occupiedPositions.add(posKey);
+      });
+    });
+  });
 });
