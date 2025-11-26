@@ -96,4 +96,27 @@ describe('isShipValidTests', function () {
       }
     });
   });
+
+  it('should not expose computer ship positions to the player', function () {
+    const playerFleet = gameController.InitializeShips();
+    const computerFleet = gameController.InitializeShips();
+
+    // Ensure the fleets are different objects
+    assert.notStrictEqual(playerFleet, computerFleet, 'Player and computer should have separate fleet objects');
+
+    // Verify that the player cannot see computer ship positions by checking
+    // that the fleets are independent
+    playerFleet.forEach((playerShip, index) => {
+      const computerShip = computerFleet[index];
+      
+      // Check that ship objects are different
+      assert.notStrictEqual(playerShip, computerShip, `Ship ${playerShip.name} should be separate objects for player and computer`);
+      
+      // Check that positions are not shared
+      if (playerShip.positions.length > 0 && computerShip.positions.length > 0) {
+        // The position objects themselves should be different
+        assert.notStrictEqual(playerShip.positions[0], computerShip.positions[0], `Ship positions should not be shared between player and computer`);
+      }
+    });
+  });
 });
