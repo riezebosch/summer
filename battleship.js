@@ -76,10 +76,15 @@ class Battleship {
                 const pSunk = playerResult.status.sunk.length;
                 const pRem = playerResult.status.remaining.length;
                 const pRemList = (playerResult.status.remaining || []).map(s => `${s.name} (${s.size})`).join(', ') || 'none';
-                console.log(`Fleet status: ${pSunk} sunk, ${pRem} remaining: ${pRemList}`);                
+                console.log(`Fleet status: ${pSunk} sunk, ${pRem} remaining: ${pRemList}`);
             }
 
             var computerPos = this.GetRandomPosition();
+
+            while(gameController.isPositionAlreadyHit(this.myFleet, computerPos)) {
+                computerPos = this.getAdjacentPositions(this.myFleet, computerPos);
+            }
+
             const computerResult = gameController.recordShot(this.myFleet, computerPos);
             telemetryWorker.postMessage({eventName: 'Computer_ShootPosition', properties:  {Position: computerPos.toString(), IsHit: computerResult.isHit}});
 
@@ -115,6 +120,23 @@ class Battleship {
         var letter = letters.get(input.toUpperCase().substring(0, 1));
         var number = parseInt(input.substring(1, 2), 10);
         return new position(letter, number);
+    }
+
+    // returns a position adjacent to the given position that has not already been hit
+    getAdjacentPositions(ships, shot) {
+        const potentialPositions = [
+            new position(shot.column, shot.row - 1), // above
+            new position(shot.column, shot.row + 1), // below
+            new position(letters.get(shot.column.value + 1), shot.row), // right
+            new position(letters.get(shot.column.value - 1), shot.row)  // left
+        ];
+        for (const pos of potentialPositions) {
+            if (pos.column && pos.row >= 1 && pos.row <= 8 && !gameController.isPositionAlreadyHit(ships, pos)) {
+                return pos;
+            }
+        }
+        // if all adjacent positions have been hit, return a random position
+        return this.GetRandomPosition();
     }
 
     GetRandomPosition() {
