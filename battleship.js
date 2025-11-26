@@ -152,28 +152,62 @@ class Battleship {
     InitializeEnemyFleet() {
         this.enemyFleet = gameController.InitializeShips();
 
-        this.enemyFleet[0].addPosition(new position(letters.B, 4));
-        this.enemyFleet[0].addPosition(new position(letters.B, 5));
-        this.enemyFleet[0].addPosition(new position(letters.B, 6));
-        this.enemyFleet[0].addPosition(new position(letters.B, 7));
-        this.enemyFleet[0].addPosition(new position(letters.B, 8));
+        // helper: random int inclusive
+        const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
 
-        this.enemyFleet[1].addPosition(new position(letters.E, 5));
-        this.enemyFleet[1].addPosition(new position(letters.E, 6));
-        this.enemyFleet[1].addPosition(new position(letters.E, 7));
-        this.enemyFleet[1].addPosition(new position(letters.E, 8));
+        const BOARD_SIZE = 8;
+        // keep track of occupied cells using numeric coords "col-row"
+        const occupied = new Set();
 
+        for (const ship of this.enemyFleet) {
+            let placed = false;
+            let attempts = 0;
+            while (!placed) {
+                attempts++;
+                if (attempts > 1000) {
+                    throw new Error(`Unable to place ship ${ship.name} after ${attempts} attempts`);
+                }
 
-        this.enemyFleet[2].addPosition(new position(letters.A, 3));
-        this.enemyFleet[2].addPosition(new position(letters.B, 3));
-        this.enemyFleet[2].addPosition(new position(letters.C, 3));
+                const horizontal = Math.random() < 0.5;
+                let startCol, startRow;
 
-        this.enemyFleet[3].addPosition(new position(letters.F, 8));
-        this.enemyFleet[3].addPosition(new position(letters.G, 8));
-        this.enemyFleet[3].addPosition(new position(letters.H, 8));
+                if (horizontal) {
+                    startCol = randInt(1, BOARD_SIZE - ship.size + 1);
+                    startRow = randInt(1, BOARD_SIZE);
+                } else {
+                    startCol = randInt(1, BOARD_SIZE);
+                    startRow = randInt(1, BOARD_SIZE - ship.size + 1);
+                }
 
-        this.enemyFleet[4].addPosition(new position(letters.C, 5));
-        this.enemyFleet[4].addPosition(new position(letters.C, 6));
+                // build candidate coordinates
+                const coords = [];
+                for (let i = 0; i < ship.size; i++) {
+                    const col = horizontal ? startCol + i : startCol;
+                    const row = horizontal ? startRow : startRow + i;
+                    coords.push({ col, row });
+                }
+
+                // check collisions
+                const collision = coords.some(c => occupied.has(`${c.col}-${c.row}`));
+                if (collision) continue;
+
+                // place ship
+                coords.forEach(c => {
+                    ship.addPosition(new position(letters.get(c.col), c.row));
+                    occupied.add(`${c.col}-${c.row}`);
+                });
+
+                // sanity: ensure correct size
+                if (ship.positions.length !== ship.size) {
+                    // cleanup and retry if ship implementation didn't add as expected
+                    ship.positions = [];
+                    coords.forEach(c => occupied.delete(`${c.col}-${c.row}`));
+                    continue;
+                }
+
+                placed = true;
+            }
+        }
     }
 }
 
