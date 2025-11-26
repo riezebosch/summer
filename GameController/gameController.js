@@ -40,6 +40,25 @@ class GameController {
         return ship.positions.every(p => p && p.isHit === true);
     }
 
+    static isPositionAlreadyHit(ships, shot) {
+        if (shot == undefined)
+            throw "The shooting position is not defined";
+        if (ships == undefined)
+            throw "No ships defined";
+        var returnvalue = false;
+        ships.forEach(function (ship) {
+            ship.positions.forEach(position => {
+                if (position.row == shot.row && position.column == shot.column) {
+                    if (position.isHit === true) {
+                        returnvalue = true;
+                    }
+                }
+            });
+        });
+
+        return returnvalue;
+    }
+
     // returns { sunk: [{name,size}], remaining: [{name,size,hitsRemaining}] }
     static getFleetStatus(ships) {
         const sunk = [];
