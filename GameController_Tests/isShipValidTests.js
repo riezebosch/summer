@@ -22,4 +22,17 @@ describe('isShipValidTests', function () {
     var actual = gameController.isShipValid(testship);
     assert.ok(!actual);
   });
+
+  it('should ensure no ship is outside the field', function () {
+    const fleet = gameController.InitializeShips();
+    fleet.forEach(ship => {
+      ship.positions.forEach(pos => {
+        assert.ok(
+          pos.column >= 1 && pos.column <= 8 &&
+          pos.row >= 1 && pos.row <= 8,
+          `Ship ${ship.name} has a position outside the field: column ${pos.column}, row ${pos.row}`
+        );
+      });
+    });
+  });
 });
