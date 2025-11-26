@@ -49,8 +49,25 @@ class Battleship {
         do {
             console.log();
             console.log(cliColor.cyan("Player, it's your turn"));
-            console.log(cliColor.cyan("Enter coordinates for your shot :"));
-            var position = Battleship.ParsePosition(readline.question());
+
+            let position;
+            while (true) {
+                console.log(cliColor.cyan("Enter coordinates for your shot :"));
+                const raw = readline.question().trim();
+                try {
+                    const candidate = Battleship.ParsePosition(raw);
+                    if (!this._isInBounds(candidate)) {
+                        console.log(cliColor.red("Invalid position. Use A1..H8. Try again."));
+                        continue;
+                    }
+                    // accept this shot
+                    position = candidate;
+                    break;
+                } catch (e) {
+                    console.log(cliColor.red("Couldn't parse that input. Use format like A1."));
+                }
+            }
+
             // recordShot will mark hits and return structured info including sunk ships and fleet status
             const playerResult = gameController.recordShot(this.enemyFleet, position);
             telemetryWorker.postMessage({eventName: 'Player_ShootPosition', properties:  {Position: position.toString(), IsHit: playerResult.isHit}});
@@ -79,7 +96,6 @@ class Battleship {
                 console.log(`Fleet status: ${pSunk} sunk, ${pRem} remaining: ${pRemList}`);                
             }
 
-            var computerPos = this.GetRandomPosition();
             const computerResult = gameController.recordShot(this.myFleet, computerPos);
             telemetryWorker.postMessage({eventName: 'Computer_ShootPosition', properties:  {Position: computerPos.toString(), IsHit: computerResult.isHit}});
 
@@ -335,6 +351,18 @@ class Battleship {
 
         this.enemyFleet[4].addPosition(new position(letters.C, 5));
         this.enemyFleet[4].addPosition(new position(letters.C, 6));
+    }
+
+    _posKey(pos) {
+        return `${pos.column}-${pos.row}`;
+    }
+
+    _isInBounds(pos) {
+        if (!pos || !pos.column) return false;
+        const LETTERS = "ABCDEFGH";
+        const col = String(pos.column).toUpperCase();
+        const row = Number(pos.row);
+        return LETTERS.includes(col) && Number.isInteger(row) && row >= 1 && row <= 8;
     }
 }
 
