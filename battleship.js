@@ -49,25 +49,8 @@ class Battleship {
         do {
             console.log();
             console.log(cliColor.cyan("Player, it's your turn"));
-
-            let position;
-            while (true) {
-                console.log(cliColor.cyan("Enter coordinates for your shot :"));
-                const raw = readline.question().trim();
-                try {
-                    const candidate = Battleship.ParsePosition(raw);
-                    if (!this._isInBounds(candidate)) {
-                        console.log(cliColor.red("Invalid position. Use A1..H8. Try again."));
-                        continue;
-                    }
-                    // accept this shot
-                    position = candidate;
-                    break;
-                } catch (e) {
-                    console.log(cliColor.red("Couldn't parse that input. Use format like A1."));
-                }
-            }
-
+            console.log(cliColor.cyan("Enter coordinates for your shot :"));
+            var position = Battleship.ParsePosition(readline.question());
             // recordShot will mark hits and return structured info including sunk ships and fleet status
             const playerResult = gameController.recordShot(this.enemyFleet, position);
             telemetryWorker.postMessage({eventName: 'Player_ShootPosition', properties:  {Position: position.toString(), IsHit: playerResult.isHit}});
@@ -96,6 +79,7 @@ class Battleship {
                 console.log(`Fleet status: ${pSunk} sunk, ${pRem} remaining: ${pRemList}`);                
             }
 
+            var computerPos = this.GetRandomPosition();
             const computerResult = gameController.recordShot(this.myFleet, computerPos);
             telemetryWorker.postMessage({eventName: 'Computer_ShootPosition', properties:  {Position: computerPos.toString(), IsHit: computerResult.isHit}});
 
@@ -151,179 +135,18 @@ class Battleship {
     InitializeMyFleet() {
         this.myFleet = gameController.InitializeShips();
 
-        const BOARD_SIZE = 8;
-        const LETTERS = "ABCDEFGH";
-        const occupied = new Set(); // "A-1" style
+        console.log(cliColor.blue("Please position your fleet (Game board size is from A to H and 1 to 8) :"));
 
-        const letterToIndex = (l) => {
-            if (!l) return 0;
-            return LETTERS.indexOf(l.toUpperCase()) + 1; // 1..8 or 0 if invalid
-        };
-
-        const normalizePos = (input) => {
-            // Accept "A1", "a1" or whitespace
-            input = input.trim().toUpperCase();
-            return Battleship.ParsePosition(input);
-        };
-
-        const posKey = (pos) => `${pos.column}-${pos.row}`;
-
-        const isInBounds = (pos) => {
-            const colIdx = letterToIndex(typeof pos.column === "string" ? pos.column : String(pos.column));
-            const row = Number(pos.row);
-            return colIdx >= 1 && colIdx <= BOARD_SIZE && row >= 1 && row <= BOARD_SIZE;
-        };
-
-        const areAlignedAndContiguous = (positions, size) => {
-            if (!Array.isArray(positions) || positions.length !== size) return false;
-            // map columns to numeric indices
-            const cols = positions.map(p => letterToIndex(typeof p.column === "string" ? p.column : String(p.column)));
-            const rows = positions.map(p => Number(p.row));
-            const allSameCol = cols.every(c => c === cols[0]);
-            const allSameRow = rows.every(r => r === rows[0]);
-
-            if (!(allSameCol || allSameRow)) return false;
-
-            if (allSameCol) {
-                // check rows are consecutive
-                const sortedRows = [...rows].sort((a, b) => a - b);
-                for (let i = 1; i < sortedRows.length; i++) {
-                    if (sortedRows[i] !== sortedRows[i - 1] + 1) return false;
-                }
-                return true;
-            } else {
-                // allSameRow -> check cols consecutive
-                const sortedCols = [...cols].sort((a, b) => a - b);
-                for (let i = 1; i < sortedCols.length; i++) {
-                    if (sortedCols[i] !== sortedCols[i - 1] + 1) return false;
-                }
-                return true;
+        this.myFleet.forEach(function (ship) {
+            console.log();
+            console.log(cliColor.blue(`Please enter the positions for the ${ship.name} (size: ${ship.size})`));
+            for (var i = 1; i < ship.size + 1; i++) {
+                    console.log(cliColor.blue(`Enter position ${i} of ${ship.size} (i.e A3):`));
+                    const position = readline.question();
+                    telemetryWorker.postMessage({eventName: 'Player_PlaceShipPosition', properties:  {Position: position, Ship: ship.name, PositionInShip: i}});
+                    ship.addPosition(Battleship.ParsePosition(position));
             }
-        };
-
-        for (const ship of this.myFleet) {
-            // clear any previously added positions (robustness)
-            ship.positions = [];
-
-            const promptText = `Place your ${ship.name} (size ${ship.size}).\n` +
-                "Enter coordinates separated by commas (e.g. A1,A2,A3 or A1-A3): ";
-
-            while (true) {
-                console.log();
-                console.log(cliColor.cyan(`Placing ${ship.name} (size ${ship.size})`));
-                let input = readline.question(promptText).trim();
-
-                // allow A1-A5 style ranges
-                if (input.includes("-") && !input.includes(",")) {
-                    const parts = input.split("-");
-                    if (parts.length === 2) {
-                        const start = parts[0].trim();
-                        const end = parts[1].trim();
-                        try {
-                            const startPos = normalizePos(start);
-                            const endPos = normalizePos(end);
-
-                            // build range
-                            const startColIdx = letterToIndex(startPos.column);
-                            const endColIdx = letterToIndex(endPos.column);
-                            const startRow = Number(startPos.row);
-                            const endRow = Number(endPos.row);
-
-                            let generated = [];
-                            if (startColIdx === endColIdx) {
-                                // vertical
-                                const minR = Math.min(startRow, endRow);
-                                const maxR = Math.max(startRow, endRow);
-                                for (let r = minR; r <= maxR; r++) {
-                                    generated.push(new position(startPos.column, r));
-                                }
-                            } else if (startRow === endRow) {
-                                // horizontal
-                                const minC = Math.min(startColIdx, endColIdx);
-                                const maxC = Math.max(startColIdx, endColIdx);
-                                for (let c = minC; c <= maxC; c++) {
-                                    generated.push(new position(LETTERS[c - 1], startRow));
-                                }
-                            } else {
-                                console.log(cliColor.red("Range must be straight horizontal or vertical."));
-                                continue;
-                            }
-
-                            // replace input by comma list for downstream validation
-                            input = generated.map(p => `${p.column}${p.row}`).join(",");
-                        } catch (e) {
-                            console.log(cliColor.red("Invalid range input. Try again."));
-                            continue;
-                        }
-                    }
-                }
-
-                // parse comma separated list
-                const parts = input.split(",").map(s => s.trim()).filter(Boolean);
-                if (parts.length !== ship.size) {
-                    console.log(cliColor.red(`You must provide exactly ${ship.size} coordinates.`));
-                    continue;
-                }
-
-                let candidatePositions = [];
-                let outOfBounds = false;
-                let invalidParse = false;
-
-                for (const part of parts) {
-                    try {
-                        const p = normalizePos(part);
-                        if (!isInBounds(p)) { outOfBounds = true; break; }
-                        candidatePositions.push(p);
-                    } catch (e) {
-                        invalidParse = true;
-                        break;
-                    }
-                }
-
-                if (invalidParse) {
-                    console.log(cliColor.red("Couldn't parse one of the coordinates. Use format like A1."));
-                    continue;
-                }
-                if (outOfBounds) {
-                    console.log(cliColor.red("One or more coordinates are outside the 8x8 board (A1..H8)."));
-                    continue;
-                }
-
-                // check alignment and contiguous
-                if (!areAlignedAndContiguous(candidatePositions, ship.size)) {
-                    console.log(cliColor.red("Positions must form a single straight contiguous line with no gaps."));
-                    continue;
-                }
-
-                // check overlap with already placed ships
-                let overlap = false;
-                for (const p of candidatePositions) {
-                    if (occupied.has(posKey(p))) { overlap = true; break; }
-                }
-                if (overlap) {
-                    console.log(cliColor.red("One or more positions overlap with an already placed ship. Choose different positions."));
-                    continue;
-                }
-
-                // All good: add positions to ship and mark occupied
-                for (const p of candidatePositions) {
-                    ship.addPosition(new position(p.column, p.row));
-                    occupied.add(posKey(p));
-                }
-
-                // final sanity check
-                if (ship.positions.length !== ship.size) {
-                    // rollback and retry (in case ship.addPosition behaves differently)
-                    ship.positions = [];
-                    for (const p of candidatePositions) occupied.delete(posKey(p));
-                    console.log(cliColor.red("Failed to set ship positions, please try again."));
-                    continue;
-                }
-
-                // placed successfully
-                break;
-            } // end while for this ship
-        } // end for ships
+        })
     }
 
     InitializeEnemyFleet() {
@@ -385,18 +208,6 @@ class Battleship {
                 placed = true;
             }
         }
-    }
-
-    _posKey(pos) {
-        return `${pos.column}-${pos.row}`;
-    }
-
-    _isInBounds(pos) {
-        if (!pos || !pos.column) return false;
-        const LETTERS = "ABCDEFGH";
-        const col = String(pos.column).toUpperCase();
-        const row = Number(pos.row);
-        return LETTERS.includes(col) && Number.isInteger(row) && row >= 1 && row <= 8;
     }
 }
 
