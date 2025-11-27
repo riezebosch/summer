@@ -1,130 +1,119 @@
 const { Worker } = require('worker_threads');
+const path = require('path');
 const readline = require('readline-sync');
 const gameController = require("./GameController/gameController.js");
 const cliColor = require('cli-color');
 const beep = require('beepbeep');
 const position = require("./GameController/position.js");
 const letters = require("./GameController/letters.js");
-let telemetryWorker;
 
 class Battleship {
+    constructor() {
+        this.telemetryWorker = null;
+    }
+
     start() {
-        telemetryWorker = new Worker("./TelemetryClient/telemetryClient.js");   
+        const workerPath = path.resolve(__dirname, "TelemetryClient", "telemetryClient.js");
+        try {
+            this.telemetryWorker = new Worker(workerPath);
+        } catch (err) {
+            console.error("Failed to start telemetry worker:", err);
+            this.telemetryWorker = null;
+        }
 
-        console.log(cliColor.blue("Starting..."));
-        telemetryWorker.postMessage({eventName: 'ApplicationStarted', properties:  {Technology: 'Node.js'}});
+        this._postTelemetry('ApplicationStarted', { Technology: 'Node.js' });
 
-        console.log(cliColor.magenta("                                     |__"));
-        console.log(cliColor.magenta("                                     |\\/"));
-        console.log(cliColor.magenta("                                     ---"));
-        console.log(cliColor.magenta("                                     / | ["));
-        console.log(cliColor.magenta("                              !      | |||"));
-        console.log(cliColor.magenta("                            _/|     _/|-++'"));
-        console.log(cliColor.magenta("                        +  +--|    |--|--|_ |-"));
-        console.log(cliColor.magenta("                     { /|__|  |/\\__|  |--- |||__/"));
-        console.log(cliColor.magenta("                    +---------------___[}-_===_.'____                 /\\"));
-        console.log(cliColor.magenta("                ____`-' ||___-{]_| _[}-  |     |_[___\\==--            \\/   _"));
-        console.log(cliColor.magenta(" __..._____--==/___]_|__|_____________________________[___\\==--____,------' .7"));
-        console.log(cliColor.magenta("|                        Welcome to Battleship                         BB-61/"));
-        console.log(cliColor.magenta(" \\_________________________________________________________________________|"));
-        console.log();
-
+        this._printWelcomeArt();
         this.InitializeGame();
         this.StartGame();
     }
 
     StartGame() {
         console.clear();
-        console.log(cliColor.yellow("                  __"));
-        console.log(cliColor.yellow("                 /  \\"));
-        console.log(cliColor.yellow("           .-.  |    |"));
-        console.log(cliColor.yellow("   *    _.-'  \\  \\__/"));
-        console.log(cliColor.yellow("    \\.-'       \\"));
-        console.log(cliColor.yellow("   /          _/"));
-        console.log(cliColor.yellow("  |      _  /"));
-        console.log(cliColor.yellow("  |     /_\\'"));
-        console.log(cliColor.yellow("   \\    \\_/"));
-        console.log(cliColor.yellow("    \"\"\"\""));
+        this._printSmallShipArt();
 
-        do {
+        while (true) {
             console.log();
             console.log(cliColor.cyan("Player, it's your turn"));
             console.log(cliColor.cyan("Enter coordinates for your shot :"));
-            var position = Battleship.ParsePosition(readline.question());
-            // recordShot will mark hits and return structured info including sunk ships and fleet status
-            const playerResult = gameController.recordShot(this.enemyFleet, position);
-            telemetryWorker.postMessage({eventName: 'Player_ShootPosition', properties:  {Position: position.toString(), IsHit: playerResult.isHit}});
+
+            let playerPos;
+            try {
+                playerPos = Battleship.ParsePosition(readline.question());
+            } catch (err) {
+                console.log(cliColor.red("Invalid position. Use format A1..H8."));
+                continue;
+            }
+
+            const playerResult = gameController.recordShot(this.enemyFleet, playerPos);
+            this._postTelemetry('Player_ShootPosition', { Position: playerPos.toString(), IsHit: playerResult.isHit });
 
             if (playerResult.isHit) {
                 beep();
-
-                console.log(cliColor.green("                \\         .  ./"));
-                console.log(cliColor.green("              \\      .:\";'.:..\"   /"));
-                console.log(cliColor.green("                  (M^^.^~~:.'\")."));
-                console.log(cliColor.green("            -   (/  .    . . \\ \\)  -"));
-                console.log(cliColor.green("               ((| :. ~ ^  :. .|))"));
-                console.log(cliColor.green("            -   (\\- |  \\ /  |  /)  -"));
-                console.log(cliColor.green("                 -\\  \\     /  /-"));
-                console.log(cliColor.green("                   \\  \\   /  /"));
+                this._printHitArt('green');
+                console.log(cliColor.green("Yeah ! Nice hit !"));
+            } else {
+                console.log(cliColor.red("Miss"));
             }
-
-            console.log(playerResult.isHit ? cliColor.green("Yeah ! Nice hit !") : cliColor.red("Miss"));
 
             if (playerResult.sunkShip) {
                 console.log(cliColor.green(`You sunk the enemy ${playerResult.sunkShip.name} (size ${playerResult.sunkShip.size})!`));
-                telemetryWorker.postMessage({eventName: 'ShipSunk', properties: {Owner: 'Enemy', Ship: playerResult.sunkShip.name, Size: playerResult.sunkShip.size}});
-                const pSunk = playerResult.status.sunk.length;
-                const pRem = playerResult.status.remaining.length;
-                const pRemList = (playerResult.status.remaining || []).map(s => `${s.name} (${s.size})`).join(', ') || 'none';
-                console.log(`Fleet status: ${pSunk} sunk, ${pRem} remaining: ${pRemList}`);                
+                this._postTelemetry('ShipSunk', { Owner: 'Enemy', Ship: playerResult.sunkShip.name, Size: playerResult.sunkShip.size });
+                this._printFleetStatus(playerResult.status, "Fleet status");
             }
 
-            var computerPos = this.GetRandomPosition();
+            // Check if enemy fleet is destroyed
+            if ((playerResult.status.remaining || []).length === 0) {
+                console.log(cliColor.green("Congratulations! You destroyed the enemy fleet!"));
+                this._shutdownTelemetry();
+                break;
+            }
+
+            // Computer turn
+            const computerPos = this.GetRandomPosition();
             const computerResult = gameController.recordShot(this.myFleet, computerPos);
-            telemetryWorker.postMessage({eventName: 'Computer_ShootPosition', properties:  {Position: computerPos.toString(), IsHit: computerResult.isHit}});
+            this._postTelemetry('Computer_ShootPosition', { Position: computerPos.toString(), IsHit: computerResult.isHit });
 
             console.log();
             console.log(cliColor.red("It's enemy turn"));
-            console.log(`Computer shot in ${computerPos.column}${computerPos.row} and ` + (computerResult.isHit ? `has hit your ship !` : `miss`));
+            console.log(`Computer shot in ${computerPos.column}${computerPos.row} and ` +
+                (computerResult.isHit ? `has hit your ship !` : `miss`));
+
             if (computerResult.isHit) {
                 beep();
-
-                console.log(cliColor.red("                \\         .  ./"));
-                console.log(cliColor.red("              \\      .:\";'.:..\"   /"));
-                console.log(cliColor.red("                  (M^^.^~~:.'\")."));
-                console.log(cliColor.red("            -   (/  .    . . \\ \\)  -"));
-                console.log(cliColor.red("               ((| :. ~ ^  :. .|))"));
-                console.log(cliColor.red("            -   (\\- |  \\ /  |  /)  -"));
-                console.log(cliColor.red("                 -\\  \\     /  /-"));
-                console.log(cliColor.red("                   \\  \\   /  /"));
+                this._printHitArt('red');
             }
 
             if (computerResult.sunkShip) {
                 console.log(cliColor.red(`Your ${computerResult.sunkShip.name} (size ${computerResult.sunkShip.size}) has been sunk!`));
-                telemetryWorker.postMessage({eventName: 'ShipSunk', properties: {Owner: 'Player', Ship: computerResult.sunkShip.name, Size: computerResult.sunkShip.size}});
-                const cSunk = computerResult.status.sunk.length;
-                const cRem = computerResult.status.remaining.length;
-                const cRemList = (computerResult.status.remaining || []).map(s => `${s.name} (${s.size})`).join(', ') || 'none';
-                console.log(`Your fleet status: ${cSunk} sunk, ${cRem} remaining: ${cRemList}`);
+                this._postTelemetry('ShipSunk', { Owner: 'Player', Ship: computerResult.sunkShip.name, Size: computerResult.sunkShip.size });
+                this._printFleetStatus(computerResult.status, "Your fleet status");
+            }
+
+            // Check if player's fleet is destroyed
+            if ((computerResult.status.remaining || []).length === 0) {
+                console.log(cliColor.red("All your ships have been sunk. Game over."));
+                this._shutdownTelemetry();
+                break;
             }
         }
-        while (true);
     }
 
     static ParsePosition(input) {
-        var letter = letters.get(input.toUpperCase().substring(0, 1));
-        var number = parseInt(input.substring(1, 2), 10);
+        if (!input || typeof input !== 'string') throw new Error('Invalid input');
+        const val = input.trim().toUpperCase();
+        const match = /^([A-H])([1-8])$/.exec(val);
+        if (!match) throw new Error('Out of range');
+        const letter = letters.get(match[1]);
+        const number = parseInt(match[2], 10);
         return new position(letter, number);
     }
 
     GetRandomPosition() {
-        var rows = 8;
-        var lines = 8;
-        var rndColumn = Math.floor(Math.random() * lines) + 1;
-        var rndRow = Math.floor(Math.random() * rows) + 1;
-        var letter = letters.get(rndColumn);
-        var result = new position(letter, rndRow);
-        return result;
+        const BOARD_SIZE = 8;
+        const rndColumn = Math.floor(Math.random() * BOARD_SIZE) + 1;
+        const rndRow = Math.floor(Math.random() * BOARD_SIZE) + 1;
+        return new position(letters.get(rndColumn), rndRow);
     }
 
     InitializeGame() {
@@ -137,26 +126,31 @@ class Battleship {
 
         console.log(cliColor.blue("Please position your fleet (Game board size is from A to H and 1 to 8) :"));
 
-        this.myFleet.forEach(function (ship) {
+        this.myFleet.forEach((ship) => {
             console.log();
             console.log(cliColor.blue(`Please enter the positions for the ${ship.name} (size: ${ship.size})`));
-            for (var i = 1; i < ship.size + 1; i++) {
+            for (let i = 1; i <= ship.size; i++) {
+                while (true) {
                     console.log(cliColor.blue(`Enter position ${i} of ${ship.size} (i.e A3):`));
-                    const position = readline.question();
-                    telemetryWorker.postMessage({eventName: 'Player_PlaceShipPosition', properties:  {Position: position, Ship: ship.name, PositionInShip: i}});
-                    ship.addPosition(Battleship.ParsePosition(position));
+                    const input = readline.question();
+                    try {
+                        const pos = Battleship.ParsePosition(input);
+                        this._postTelemetry('Player_PlaceShipPosition', { Position: input, Ship: ship.name, PositionInShip: i });
+                        ship.addPosition(pos);
+                        break;
+                    } catch (err) {
+                        console.log(cliColor.red("Invalid position. Try again."));
+                    }
+                }
             }
-        })
+        });
     }
 
     InitializeEnemyFleet() {
         this.enemyFleet = gameController.InitializeShips();
 
-        // helper: random int inclusive
         const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-
         const BOARD_SIZE = 8;
-        // keep track of occupied cells using numeric coords "col-row"
         const occupied = new Set();
 
         for (const ship of this.enemyFleet) {
@@ -169,17 +163,9 @@ class Battleship {
                 }
 
                 const horizontal = Math.random() < 0.5;
-                let startCol, startRow;
+                const startCol = horizontal ? randInt(1, BOARD_SIZE - ship.size + 1) : randInt(1, BOARD_SIZE);
+                const startRow = horizontal ? randInt(1, BOARD_SIZE) : randInt(1, BOARD_SIZE - ship.size + 1);
 
-                if (horizontal) {
-                    startCol = randInt(1, BOARD_SIZE - ship.size + 1);
-                    startRow = randInt(1, BOARD_SIZE);
-                } else {
-                    startCol = randInt(1, BOARD_SIZE);
-                    startRow = randInt(1, BOARD_SIZE - ship.size + 1);
-                }
-
-                // build candidate coordinates
                 const coords = [];
                 for (let i = 0; i < ship.size; i++) {
                     const col = horizontal ? startCol + i : startCol;
@@ -187,19 +173,16 @@ class Battleship {
                     coords.push({ col, row });
                 }
 
-                // check collisions
                 const collision = coords.some(c => occupied.has(`${c.col}-${c.row}`));
                 if (collision) continue;
 
-                // place ship
                 coords.forEach(c => {
                     ship.addPosition(new position(letters.get(c.col), c.row));
                     occupied.add(`${c.col}-${c.row}`);
                 });
 
-                // sanity: ensure correct size
                 if (ship.positions.length !== ship.size) {
-                    // cleanup and retry if ship implementation didn't add as expected
+                    // cleanup and retry
                     ship.positions = [];
                     coords.forEach(c => occupied.delete(`${c.col}-${c.row}`));
                     continue;
@@ -208,6 +191,81 @@ class Battleship {
                 placed = true;
             }
         }
+    }
+
+    // Helpers
+    _postTelemetry(eventName, properties) {
+        if (!this.telemetryWorker) return;
+        try {
+            this.telemetryWorker.postMessage({ eventName, properties });
+        } catch (err) {
+            // don't let telemetry failures crash the game
+        }
+    }
+
+    _shutdownTelemetry() {
+        if (!this.telemetryWorker) return;
+        try {
+            this.telemetryWorker.terminate();
+        } catch (err) { /* ignore */ }
+        this.telemetryWorker = null;
+    }
+
+    _printWelcomeArt() {
+        const art = [
+            "                                     |__",
+            "                                     |\\/",
+            "                                     ---",
+            "                                     / | [",
+            "                              !      | |||",
+            "                            _/|     _/|-++'",
+            "                        +  +--|    |--|--|_ |-",
+            "                     { /|__|  |/\\__|  |--- |||__/",
+            "                    +---------------___[}-_===_.'____                 /\\",
+            "                ____`-' ||___-{]_| _[}-  |     |_[___\\==--            \\/   _",
+            " __..._____--==/___]_|__|_____________________________[___\\==--____,------' .7",
+            "|                        Welcome to Battleship                         BB-61/",
+            " \\_________________________________________________________________________|"
+        ];
+        art.forEach(line => console.log(cliColor.magenta(line)));
+        console.log();
+    }
+
+    _printSmallShipArt() {
+        const art = [
+            "                  __",
+            "                 /  \\",
+            "           .-.  |    |",
+            "   *    _.-'  \\  \\__/",
+            "    \\.-'       \\",
+            "   /          _/",
+            "  |      _  /",
+            "  |     /_\\'",
+            "   \\    \\_/",
+            "    \"\"\"\""
+        ];
+        art.forEach(line => console.log(cliColor.yellow(line)));
+    }
+
+    _printHitArt(color) {
+        const fn = color === 'red' ? cliColor.red : cliColor.green;
+        [
+            "                \\         .  ./",
+            "              \\      .:\";'.:..\"   /",
+            "                  (M^^.^~~:.'\").",
+            "            -   (/  .    . . \\ \\)  -",
+            "               ((| :. ~ ^  :. .|))",
+            "            -   (\\- |  \\ /  |  /)  -",
+            "                 -\\  \\     /  /-",
+            "                   \\  \\   /  /"
+        ].forEach(line => console.log(fn(line)));
+    }
+
+    _printFleetStatus(status, prefix) {
+        const sunk = (status.sunk || []).length;
+        const remaining = (status.remaining || []).length;
+        const remList = (status.remaining || []).map(s => `${s.name} (${s.size})`).join(', ') || 'none';
+        console.log(`${prefix}: ${sunk} sunk, ${remaining} remaining: ${remList}`);
     }
 }
 
